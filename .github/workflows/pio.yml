@@ -1,0 +1,50 @@
+name: PlatformIO CI
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+    paths:
+      - "back/include/**"
+      - "back/lib/**"
+      - "back/src/**"
+      - "platformio.ini"
+      - ".github/workflows/pio.yml"
+  pull_request:
+    branches:
+      - master
+      - develop
+    paths:
+      - "back/include/**"
+      - "back/lib/**"
+      - "back/src/**"
+      - "platformio.ini"
+      - ".github/workflows/pio.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Rename header file
+        run: mv back/params.ini.tpl back/params.ini
+
+      - name: Rename config file
+        run: mv back/include/environment.h.tpl back/include/environment.h
+
+      - name: Build PlatformIO Project
+        run: pio run

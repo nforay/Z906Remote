@@ -1,0 +1,33 @@
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.pio
+.DS_Store
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+#!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+back/params.ini
+back/include/environment.h
+
+front/node_modules
+front/dist

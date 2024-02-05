@@ -1,0 +1,63 @@
+name: VueJS CI
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+    paths:
+      - "front/**"
+  pull_request:
+    branches:
+      - master
+      - develop
+    paths:
+      - "front/**"
+
+env:
+  NODE_VERSION: 20
+
+jobs:
+  build:
+    name: Build VueJS App
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - name: Install NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Code Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Remove old files
+        if: github.ref == 'refs/heads/master'
+        run: rm -r ../back/data
+
+      - name: Copy
+        if: github.ref == 'refs/heads/master'
+        run: cp -r dist ../back/data
+
+      - name: Gzip
+        if: github.ref == 'refs/heads/master'
+        working-directory: ./back/data/assets
+        run: for f in ./*; do gzip -9 ${f}; mv ${f}.gz ${f}; done;
+
+      - name: Commit
+        if: github.ref == 'refs/heads/master'
+        working-directory: ./back/data/assets
+        run: |
+          git config user.name GitHub Actions
+          git config user.email actions@github.com
+          git add .
+          git commit -m "🚀Build and compress Vue App to the LittleFS filesystem" -m "Co-Authored-By: ${GITHUB_ACTOR} <${GITHUB_ACTOR}@users.noreply.github.com>"
+          git push
