@@ -2,6 +2,8 @@
 
 ![Z906 banner](/../docs/images/logitech_z906.webp?raw=true "Z906 banner")
 
+![App preview](/../docs/images/preview.gif?raw=true)
+
 |            | develop                                                                                                        | master                                                                                                        |
 | ---------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | VueJS App  | ![workflow status](https://github.com/nforay/Z906Remote/actions/workflows/nodejs.yml/badge.svg?branch=develop) | ![workflow status](https://github.com/nforay/Z906Remote/actions/workflows/nodejs.yml/badge.svg?branch=master) |
