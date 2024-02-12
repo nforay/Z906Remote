@@ -107,7 +107,7 @@ namespace z906remote {
 
         if (endpoint == "/" || endpoint == "/index.html") {
             fs::File file = LittleFS.open("/index.html", "r");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
+            SERVER.sendHeader("cache-control", "no-cache");
             return SERVER.send(200, "text/html", file, file.size());
         } else if (endpoint == "/assets/Default.css") {
             fs::File file = LittleFS.open("/assets/Default.css", "r");
