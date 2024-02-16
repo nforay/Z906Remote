@@ -1,5 +1,8 @@
 {
   "editor.formatOnSave": true,
+  "files.eol": "\r\n",
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": false,
   "C_Cpp.codeAnalysis.clangTidy.enabled": true,
   "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
   "C_Cpp.codeAnalysis.exclude": {
