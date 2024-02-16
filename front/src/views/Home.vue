@@ -35,7 +35,6 @@
     <v-window-item key="effect" value="#effect">
       <EffectView
         :loading="loading"
-        :current_input="status.data.current_input"
         :current_fx="status.data.current_fx"
         :decode_mode="status.data.decode_mode"
         @update="GetStatus"
@@ -65,8 +64,6 @@ const tabs = [
   { title: 'input', icon: '$rca', value: '#input' },
   { title: 'effect', icon: '$surround', value: '#effect' },
 ]
-
-//setInterval(() => GetStatus(), 5000);
 
 const GetStatus = () => {
   axios.get<Status>('/status').then((response) => {

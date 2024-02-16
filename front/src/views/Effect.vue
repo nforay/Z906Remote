@@ -42,10 +42,9 @@
               >4.1
             </v-btn>
 
-            <v-btn v-if="current_input == 0" :value="3" class="flex-grow-1">
+            <v-btn :value="3" class="flex-grow-1">
               <v-tooltip v-bind:open-on-hover="!decodeMode" :open-delay="1000" activator="parent" location="bottom">
-                No effect: Plays audio format of your computer’s sound card without applying any effects. Available for
-                6 channel input only.</v-tooltip
+                No effect: Plays audio format without applying any effects.</v-tooltip
               >OFF
             </v-btn>
           </v-btn-toggle>
@@ -64,7 +63,6 @@ const emit = defineEmits<{
 }>()
 
 const props = defineProps({
-  current_input: { type: Number, required: true },
   current_fx: { type: Number, required: true },
   decode_mode: { type: Boolean, required: true },
   loading: { type: Boolean, required: true },
