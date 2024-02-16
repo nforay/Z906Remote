@@ -17,6 +17,7 @@
 #include <WString.h>
 #include <WiFiUdp.h>
 #include <Z906.h>
+#include <string_view>
 
 
 #define CONTENT_TEXT "text/plain"
@@ -95,7 +96,7 @@ namespace z906remote {
      * Handle a HTTP request.
      */
     void handle_request() {
-        String endpoint = SERVER.uri();
+        std::string_view endpoint = SERVER.uri().c_str();
 
         // CORS preflight
         if (SERVER.method() == HTTP_OPTIONS) {
@@ -156,7 +157,7 @@ namespace z906remote {
         }
 
         if (endpoint.length() > 1)
-            endpoint = endpoint.substring(1);
+            endpoint.remove_prefix(1);
 
         // Check if the Z906 is connected before processing any commands.
         if (LOGI.request(VERSION) == 0)
@@ -164,7 +165,7 @@ namespace z906remote {
 
         // Handle defined endpoints.
         for (const Endpoint &e : endpoints) {
-            if (e.path == endpoint)
+            if (endpoint == e.path.c_str())
                 return respond_to_request(e);
         }
 
