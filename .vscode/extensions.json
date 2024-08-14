@@ -6,6 +6,7 @@
         "antfu.vite",
         "ms-vscode.cpptools",
         "platformio.platformio-ide",
+        "rvest.vs-code-prettier-eslint",
         "vue.volar",
         "vue.vscode-typescript-vue-plugin",
         "xaver.clang-format"
