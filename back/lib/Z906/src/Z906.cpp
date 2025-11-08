@@ -5,9 +5,6 @@
 Z906::Z906(HardwareSerial &serial) {
     _dev_serial = &serial;
     _dev_serial->begin(BAUD_RATE, SERIAL_CONFIG);
-    cmd(SELECT_EFFECT_51);
-    cmd(MUTE_OFF);
-    cmd(NO_BLOCK_INPUTS);
 }
 
 /**
@@ -221,7 +218,7 @@ int Z906::update() {
  * @return The requested data, or 0 if the update operation fails or the command
  * is invalid.
  */
-int Z906::request(uint8_t cmd) {
+int Z906::request(const uint8_t cmd) {
     if (update()) {
         // Return specific data based on the provided command
         switch (cmd) {
@@ -261,7 +258,7 @@ int Z906::request(uint8_t cmd) {
  * @return The response received from the Z906 device, or 0 if the operation
  * times out.
  */
-int Z906::cmd(uint8_t cmd) {
+int Z906::cmd(const uint8_t cmd) {
     // Send the specified command to the device
     write(cmd);
 
@@ -301,7 +298,7 @@ int Z906::cmd(uint8_t cmd) {
  * MAIN_LEVEL, REAR_LEVEL, etc.).
  * @param cmd_b The value to be set for the specified parameter.
  */
-void Z906::cmd(uint8_t cmdA, uint8_t cmdB) {
+void Z906::cmd(const uint8_t cmdA, uint8_t cmdB) {
     // Update the internal status buffer with the current device status
     update();
 
