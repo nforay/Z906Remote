@@ -109,9 +109,9 @@ public:
 
     Z906(HardwareSerial &serial);
 
-    int  cmd(uint8_t);
-    void cmd(uint8_t, uint8_t);
-    int  request(uint8_t);
+    int  cmd(const uint8_t);
+    void cmd(const uint8_t, uint8_t);
+    int  request(const uint8_t);
     void print_status();
 
     uint8_t main_sensor();

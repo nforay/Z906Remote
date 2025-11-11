@@ -9,37 +9,36 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
-#include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266mDNS.h>
+#include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+#include <NTPClient.h>
 #include <WString.h>
 #include <WiFiUdp.h>
 #include <Z906.h>
-#include <string_view>
-
-
-#define CONTENT_TEXT "text/plain"
-#define CONTENT_JSON "application/json"
 
 namespace z906remote {
 
-    void init_wifi();
-    void connect_to_wifi();
-    void on_connected();
-    void init_web_server();
-    void handle_request();
-    void respond_to_request(const Endpoint &endpoint);
-    void handle_get_status();
-    void handle_muted_state();
-    void handle_get_temperature();
-    void handle_decode_mode_state();
-    void handle_current_effect();
-    bool validate_input_value(const String &argName, uint8_t &result);
+    void         init_wifi();
+    void         connect_to_wifi();
+    void         on_connected();
+    void         init_web_server();
+    JsonDocument respond_to_request(const Endpoint &, const String &, int &);
+    void         handle_get_status(JsonDocument &);
+    void         handle_muted_state(JsonDocument &);
+    void         handle_get_temperature(JsonDocument &);
+    void         handle_decode_mode_state(JsonDocument &);
+    void         handle_current_effect(JsonDocument &);
+    bool         validate_input_value(const String &, uint8_t &);
 
-    ESP8266WebServer SERVER(80);
+    AsyncWebServer   SERVER(80);
     ESP8266WiFiMulti WIFIMULTI;
+
+    WiFiUDP   ntpUDP;
+    NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
+    time_t    currentTime;
 
     // Instantiate a Z906 object and attach to Serial
     Z906 LOGI(Serial);
@@ -87,114 +86,100 @@ namespace z906remote {
      * Setup the web server.
      */
     void init_web_server() {
-        SERVER.onNotFound(handle_request);
-        SERVER.enableCORS(true);
-        SERVER.begin();
-    }
+        SERVER.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+            request->send(LittleFS, "/index.html", "text/html");
+        });
 
-    /**
-     * Handle a HTTP request.
-     */
-    void handle_request() {
-        std::string_view endpoint = SERVER.uri().c_str();
+        SERVER.on("/index.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+            request->send(LittleFS, "/index.html", "text/html");
+        });
 
-        // CORS preflight
-        if (SERVER.method() == HTTP_OPTIONS) {
-            SERVER.sendHeader("Access-Control-Allow-Methods", "GET");
-            SERVER.sendHeader("Access-Control-Allow-Headers",
-                              "access-control-allow-origin");
-            return SERVER.send(200, CONTENT_TEXT);
-        }
+        SERVER.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
+            request->send(LittleFS, "/favicon.ico", "image/x-icon");
+        });
 
-        if (endpoint == "/" || endpoint == "/index.html") {
-            fs::File file = LittleFS.open("/index.html", "r");
-            SERVER.sendHeader("cache-control", "no-cache");
-            return SERVER.send(200, "text/html", file, file.size());
-        } else if (endpoint == "/assets/Default.css") {
-            fs::File file = LittleFS.open("/assets/Default.css", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "text/css", file, file.size());
-        } else if (endpoint == "/assets/Home.css") {
-            fs::File file = LittleFS.open("/assets/Home.css", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "text/css", file, file.size());
-        } else if (endpoint == "/assets/index.css") {
-            fs::File file = LittleFS.open("/assets/index.css", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "text/css", file, file.size());
-        } else if (endpoint == "/assets/ssrBoot.css") {
-            fs::File file = LittleFS.open("/assets/ssrBoot.css", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "text/css", file, file.size());
-        } else if (endpoint == "/assets/Default.js") {
-            fs::File file = LittleFS.open("/assets/Default.js", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "application/javascript", file, file.size());
-        } else if (endpoint == "/assets/Home.js") {
-            fs::File file = LittleFS.open("/assets/Home.js", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "application/javascript", file, file.size());
-        } else if (endpoint == "/assets/index.js") {
-            fs::File file = LittleFS.open("/assets/index.js", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "application/javascript", file, file.size());
-        } else if (endpoint == "/assets/ssrBoot.js") {
-            fs::File file = LittleFS.open("/assets/ssrBoot.js", "r");
-            SERVER.sendHeader("content-encoding", "gzip");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "application/javascript", file, file.size());
-        } else if (endpoint == "/favicon.ico") {
-            fs::File file = LittleFS.open("/favicon.ico", "r");
-            SERVER.sendHeader("cache-control", "max-age=31536000");
-            return SERVER.send(200, "image/x-icon", file, file.size());
-        }
+        SERVER.serveStatic("/assets", LittleFS, "/assets/")
+            .setCacheControl("max-age=31536000")
+            .setLastModified(currentTime)
+            .setTryGzipFirst(true);
 
-        if (endpoint.length() > 1)
-            endpoint.remove_prefix(1);
+        SERVER.onNotFound([](AsyncWebServerRequest *request) {
+            if (request->method() == HTTP_OPTIONS) {
+                AsyncWebServerResponse *response = request->beginResponse(200);
+                response->addHeader("Access-Control-Allow-Origin", "*");
+                response->addHeader("Access-Control-Allow-Methods",
+                                    "GET, OPTIONS");
+                response->addHeader("Access-Control-Allow-Headers",
+                                    "access-control-allow-origin");
+                request->send(response);
+                return;
+            }
 
-        // Check if the Z906 is connected before processing any commands.
-        if (LOGI.request(VERSION) == 0)
-            return SERVER.send(200, CONTENT_JSON, R"({"status": "disconnected"})");
+            AsyncWebServerResponse *response =
+                request->beginResponse(302, "text/plain", "");
+            response->addHeader("Location", "/");
+            request->send(response);
+        });
 
-        // Handle defined endpoints.
         for (const Endpoint &e : endpoints) {
-            if (endpoint == e.path.c_str())
-                return respond_to_request(e);
+            SERVER.on(e.path, HTTP_GET, [e](AsyncWebServerRequest *request) {
+                AsyncResponseStream *response =
+                    request->beginResponseStream("application/json");
+                String       value = request->hasParam("value")
+                                         ? request->getParam("value")->value()
+                                         : "";
+                int          code  = 200;
+                JsonDocument doc   = respond_to_request(e, value, code);
+                serializeJson(doc, *response);
+                response->setCode(code);
+                request->send(response);
+            });
         }
 
-        // If not found, redirect to home.
-        SERVER.sendHeader("Location", String("/"), true);
-        SERVER.send(302, CONTENT_TEXT, "");
+        SERVER.begin();
     }
 
     /**
      * Respond to a HTTP request for the given endpoint.
      */
-    void respond_to_request(const Endpoint &endpoint) {
+    JsonDocument respond_to_request(const Endpoint &endpoint,
+                                    const String &value, int &code) {
         JsonDocument doc;
-        String       output;
-        int          code = 200;
-        uint8_t      parsedValue;
+        uint8_t      parsedValue = 0;
+        int          response;
 
+
+        if (LOGI.request(VERSION) == 0) {
+            doc["status"] = "disconnected";
+            return doc;
+        }
         doc["status"]  = "connected";
         doc["success"] = true;
+
+        JsonObject debug = doc["debug"].to<JsonObject>();
+        debug["path"]    = endpoint.path;
+        debug["type"]    = endpoint.type;
+        debug["action"]  = ([](int i) {
+            String s = String(i, HEX);
+            s.toUpperCase();
+            return s;
+        })(endpoint.action);
+        debug["value"]   = value;
 
         switch (endpoint.type) {
         case EndpointType::SelectInput:
             LOGI.input(endpoint.action);
             break;
         case EndpointType::RunCommand:
-            LOGI.cmd(endpoint.action);
+            response = LOGI.cmd(endpoint.action);
+            if (response) {
+                doc["value"] = response;
+            } else {
+                doc["success"] = false;
+            }
             break;
         case EndpointType::SetValue:
-            if (validate_input_value("value", parsedValue)) {
+            if (validate_input_value(value, parsedValue)) {
                 LOGI.cmd(endpoint.action, parsedValue);
             } else {
                 code = 400;
@@ -210,38 +195,39 @@ namespace z906remote {
         case EndpointType::RunFunction:
             switch (endpoint.action) {
             case FunctionAction::Status:
-                return handle_get_status();
+                handle_get_status(doc);
+                break;
             case FunctionAction::Mute:
-                return handle_muted_state();
+                handle_muted_state(doc);
+                break;
             case FunctionAction::Effect:
-                return handle_current_effect();
+                handle_current_effect(doc);
+                break;
             case FunctionAction::Temperature:
-                return handle_get_temperature();
+                handle_get_temperature(doc);
+                break;
             case FunctionAction::Decode:
-                return handle_decode_mode_state();
+                handle_decode_mode_state(doc);
+                break;
             default: // do nothing
                 break;
             }
+            break;
             // fall through
         default:
-            doc["success"] = false;
             code           = 405;
+            doc["success"] = false;
             doc["message"] =
                 "Your action was recognised, but it is not supported.";
             break;
         }
-        serializeJson(doc, output);
-        return SERVER.send(code, CONTENT_JSON, output);
+        return doc;
     }
 
-    void handle_get_status() {
+    inline void handle_get_status(JsonDocument &doc) {
         const Z906::t_packetdata packet = LOGI.get_data();
-        JsonDocument             doc;
-        JsonObject               data = doc["data"].to<JsonObject>();
-        String                   output;
+        JsonObject               data   = doc["data"].to<JsonObject>();
 
-        doc["status"]         = "connected";
-        doc["success"]        = true;
         data["main_level"]    = packet.main_level;
         data["center_level"]  = packet.center_level;
         data["rear_level"]    = packet.rear_level;
@@ -260,73 +246,36 @@ namespace z906remote {
         data["signal_status"] = packet.signal_status;
         data["stby"]          = packet.stby;
         data["auto_stby"]     = packet.auto_stby;
-        serializeJson(doc, output);
-
-        return SERVER.send(200, CONTENT_JSON, output);
     }
 
     /**
      * Get the muted state.
      */
-    void handle_muted_state() {
-        JsonDocument doc;
-        String       output;
-
-        doc["status"]  = "connected";
-        doc["success"] = true;
-        doc["value"]   = LOGI.muted_state();
-        serializeJson(doc, output);
-
-        return SERVER.send(200, CONTENT_JSON, output);
+    inline void handle_muted_state(JsonDocument &doc) {
+        doc["value"] = LOGI.muted_state();
     }
 
     /**
      * Get the Effect on the current input
      */
-    void handle_current_effect() {
-        JsonDocument doc;
-        String       output;
-
-        doc["status"]  = "connected";
-        doc["success"] = true;
-        doc["value"]   = LOGI.current_effect();
-        serializeJson(doc, output);
-
-        return SERVER.send(200, CONTENT_JSON, output);
+    inline void handle_current_effect(JsonDocument &doc) {
+        doc["value"] = LOGI.current_effect();
     }
 
     /**
      * Handle the getTemperature function.
      */
-    void handle_get_temperature() {
-        JsonDocument doc;
-        String       output;
-
+    inline void handle_get_temperature(JsonDocument &doc) {
         const uint8_t value = LOGI.main_sensor();
-        doc["status"]       = "connected";
-        doc["success"]      = true;
+        doc["success"]      = !value ? false : true;
         doc["value"]        = value;
-        serializeJson(doc, output);
-        if (value > 0)
-            return SERVER.send(200, CONTENT_JSON, output);
-
-        doc["success"] = false;
-        return SERVER.send(200, CONTENT_JSON, output);
     }
 
     /**
      * Get the 5.1 Decode Mode state.
      */
-    void handle_decode_mode_state() {
-        JsonDocument doc;
-        String       output;
-
-        doc["status"]  = "connected";
-        doc["success"] = true;
-        doc["value"]   = LOGI.decode_mode();
-        serializeJson(doc, output);
-
-        return SERVER.send(200, CONTENT_JSON, output);
+    inline void handle_decode_mode_state(JsonDocument &doc) {
+        doc["value"] = LOGI.decode_mode();
     }
 
     /**
@@ -334,28 +283,22 @@ namespace z906remote {
      * Returns true if the value is valid, false otherwise.
      * If valid, the parsed value is stored in the 'result' parameter.
      */
-    bool validate_input_value(const String &argName, uint8_t &result) {
-        if (SERVER.hasArg(argName)) {
-            String        valueStr = SERVER.arg(argName);
-            const int32_t value    = valueStr.toInt();
+    bool validate_input_value(const String &valueStr, uint8_t &result) {
+        const int32_t value = valueStr.toInt();
 
-            // Check if the conversion was successful
-            if (value != 0L || valueStr.equals("0")) {
+        // Check if the conversion was successful
+        if (value != 0L || valueStr.equals("0")) {
 
-                if (value >= 0L && value <= 255L) {
-                    // Valid value, store the result.
-                    result = static_cast<uint8_t>(value);
-                    return true; // Value is valid.
-                } else {
-                    // Value is not in the valid range.
-                    return false;
-                }
+            if (value >= 0L && value <= 255L) {
+                // Valid value, store the result.
+                result = static_cast<uint8_t>(value);
+                return true; // Value is valid.
             } else {
-                // Invalid value format.
+                // Value is not in the valid range.
                 return false;
             }
         } else {
-            // No value provided in the request.
+            // Invalid value format.
             return false;
         }
     }
@@ -368,6 +311,11 @@ namespace z906remote {
 void setup() {
     LittleFS.begin();
     z906remote::init_wifi();
+    z906remote::timeClient.begin();
+    while (!z906remote::timeClient.update()) {
+        z906remote::timeClient.forceUpdate();
+    }
+    z906remote::currentTime = z906remote::timeClient.getEpochTime();
     z906remote::init_web_server();
     ArduinoOTA.setPassword(OTApassword);
     ArduinoOTA.begin();
@@ -379,6 +327,6 @@ void setup() {
 void loop() {
     if (WiFi.status() != WL_CONNECTED)
         z906remote::connect_to_wifi();
-    z906remote::SERVER.handleClient();
+    z906remote::timeClient.update();
     ArduinoOTA.handle();
 }
