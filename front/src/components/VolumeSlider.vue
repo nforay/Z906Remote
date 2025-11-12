@@ -31,15 +31,11 @@ const props = defineProps({
   loading: Boolean,
 })
 
-const emit = defineEmits(['update'])
-
 const volume = computed({
   get(): number {
     return props.value
   },
-  set() {
-    emit('update')
-  },
+  set() {},
 })
 
 const trackColor = computed(() => {

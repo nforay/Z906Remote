@@ -24,6 +24,10 @@ namespace z906remote {
     void         init_wifi();
     void         connect_to_wifi();
     void         on_connected();
+    void         onWebSocketMessage(void *, uint8_t *, size_t);
+    void         broadcastMessage(const String &);
+    void         broadcastStatus();
+    void         updateClients();
     void         init_web_server();
     JsonDocument respond_to_request(const Endpoint &, const String &, int &);
     void         handle_get_status(JsonDocument &);
@@ -35,10 +39,13 @@ namespace z906remote {
 
     AsyncWebServer   SERVER(80);
     ESP8266WiFiMulti WIFIMULTI;
+    AsyncWebSocket   WS("/ws");
 
-    WiFiUDP   ntpUDP;
-    NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
-    time_t    currentTime;
+    WiFiUDP       ntpUDP;
+    NTPClient     timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
+    time_t        currentTime;
+    unsigned long lastUpdate = 0;
+    unsigned long timerDelay = 60000;
 
     // Instantiate a Z906 object and attach to Serial
     Z906 LOGI(Serial);
@@ -80,6 +87,47 @@ namespace z906remote {
 
         // Configure MDNS.
         MDNS.begin("logitech-z906");
+    }
+
+    /**
+     * When a WebSocket message is recieved, echo the content to all clients
+     */
+    void onWebSocketMessage(void *arg, uint8_t *data, size_t len) {
+        AwsFrameInfo *info = (AwsFrameInfo *)arg;
+        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+            data[len] = 0;
+            WS.textAll(String("Echo: ") + (char *)data);
+        }
+    }
+
+    /**
+     * Send a message to all Websocket clients
+     */
+    void broadcastMessage(const String &message) { WS.textAll(message); }
+
+    /**
+     * Send the status content as JSON to all clients
+     */
+    void broadcastStatus() {
+        JsonDocument doc;
+        String       status;
+
+        // workaround until proper cmd response response handling is implemented
+        LOGI.request(GET_STATUS);
+
+        handle_get_status(doc);
+        serializeJson(doc, status);
+        WS.textAll(status);
+    }
+
+    /**
+     * Run broadcastStatus() periodically
+     */
+    void updateClients() {
+        if (millis() - lastUpdate > timerDelay) {
+            lastUpdate = millis();
+            z906remote::broadcastStatus();
+        }
     }
 
     /**
@@ -136,6 +184,24 @@ namespace z906remote {
             });
         }
 
+        WS.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client,
+                      AwsEventType type, void *arg, uint8_t *data, size_t len) {
+            switch (type) {
+            case WS_EVT_CONNECT:
+                break;
+            case WS_EVT_DISCONNECT:
+                break;
+            case WS_EVT_DATA:
+                onWebSocketMessage(arg, data, len);
+                break;
+            default:
+                break;
+            }
+            (void)server;
+            (void)client;
+        });
+
+        SERVER.addHandler(&WS);
         SERVER.begin();
     }
 
@@ -169,9 +235,11 @@ namespace z906remote {
         switch (endpoint.type) {
         case EndpointType::SelectInput:
             LOGI.input(endpoint.action);
+            broadcastStatus();
             break;
         case EndpointType::RunCommand:
             response = LOGI.cmd(endpoint.action);
+            broadcastStatus();
             if (response) {
                 doc["value"] = response;
             } else {
@@ -181,6 +249,7 @@ namespace z906remote {
         case EndpointType::SetValue:
             if (validate_input_value(value, parsedValue)) {
                 LOGI.cmd(endpoint.action, parsedValue);
+                broadcastStatus();
             } else {
                 code = 400;
 
@@ -329,4 +398,6 @@ void loop() {
         z906remote::connect_to_wifi();
     z906remote::timeClient.update();
     ArduinoOTA.handle();
+    z906remote::updateClients();
+    z906remote::WS.cleanupClients();
 }

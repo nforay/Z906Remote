@@ -58,10 +58,6 @@
 import { computed } from 'vue'
 import axios from 'axios'
 
-const emit = defineEmits<{
-  (e: 'update'): { type: void; required: true }
-}>()
-
 const props = defineProps({
   current_fx: { type: Number, required: true },
   decode_mode: { type: Boolean, required: true },
@@ -86,15 +82,11 @@ const decodeMode = computed<boolean>({
 
 const SetEffect = (effect: number) => {
   if (effect != selectedEffect.value) {
-    axios.get('/input/effect/' + effect).then(() => {
-      emit('update')
-    })
+    axios.get('/input/effect/' + effect)
   }
 }
 
 const SetDecode = (input: boolean) => {
-  axios.get('/input/decode/' + (input ? 'off' : 'on')).then(() => {
-    emit('update')
-  })
+  axios.get('/input/decode/' + (input ? 'off' : 'on'))
 }
 </script>

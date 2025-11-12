@@ -21,10 +21,6 @@
 import { computed } from 'vue'
 import axios from 'axios'
 
-const emit = defineEmits<{
-  (e: 'update'): { type: void; required: true }
-}>()
-
 const props = defineProps({
   current_input: { type: Number, required: true },
   loading: { type: Boolean, required: true },
@@ -48,9 +44,7 @@ const selectedInput = computed<Number>({
 
 const SetInput = (input: Number | null) => {
   if (input != selectedInput.value) {
-    axios.get('/input/' + input).then(() => {
-      emit('update')
-    })
+    axios.get('/input/' + input)
   }
 }
 </script>

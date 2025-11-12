@@ -17,7 +17,6 @@
         :muted="status.data.muted"
         :main_level="status.data.main_level"
         :standby="status.data.stby"
-        @update="GetStatus"
       ></MainView>
     </v-window-item>
     <v-window-item key="volume" value="#level">
@@ -26,7 +25,6 @@
         :center_level="status.data.center_level"
         :rear_level="status.data.rear_level"
         :sub_level="status.data.sub_level"
-        @update="GetStatus"
       ></LevelView>
     </v-window-item>
     <v-window-item key="input" value="#input">
@@ -37,7 +35,6 @@
         :loading="loading"
         :current_fx="status.data.current_fx"
         :decode_mode="status.data.decode_mode"
-        @update="GetStatus"
       ></EffectView>
     </v-window-item>
   </v-window>
@@ -51,11 +48,12 @@ import MainView from '@/views/Main.vue'
 import LevelView from '@/views/Level.vue'
 import InputView from '@/views/Input.vue'
 import EffectView from '@/views/Effect.vue'
-import Status from '@/models/statusDTO'
+import Status, { Data } from '@/models/statusDTO'
 
 const status = ref<Status>(new Status())
 const loading = ref(true)
 const router = useRouter()
+const ws = new WebSocket('ws://'+import.meta.env.VITE_API_ENDPOINT+'/ws')
 
 const currentTab = ref(router.currentRoute.value.hash)
 const tabs = [
@@ -64,6 +62,15 @@ const tabs = [
   { title: 'input', icon: '$rca', value: '#input' },
   { title: 'effect', icon: '$surround', value: '#effect' },
 ]
+
+ws.onmessage = (event) => {
+  try {
+    const incoming: Partial<Data> = JSON.parse(event.data)
+    Object.assign(status.value, incoming)
+  } catch (e) {
+    console.error('Invalid Message :', event.data)
+  }
+}
 
 const GetStatus = () => {
   axios.get<Status>('/status').then((response) => {

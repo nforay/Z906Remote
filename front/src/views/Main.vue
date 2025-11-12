@@ -9,7 +9,7 @@
           <v-icon :icon="muted ? '$muteOn' : '$muteOff'"></v-icon>
         </v-btn>
       </v-skeleton-loader>
-      <VolumeSlider name="main" v-bind:value="main_level" :loading="loading" class="py-5" @update="emit('update')" />
+      <VolumeSlider name="main" v-bind:value="main_level" :loading="loading" class="py-5" />
     </v-card>
   </v-container>
 </template>
@@ -17,10 +17,6 @@
 <script setup lang="ts">
 import axios from 'axios'
 import VolumeSlider from '@/components/VolumeSlider.vue'
-
-const emit = defineEmits<{
-  (e: 'update'): { type: void; required: true }
-}>()
 
 const props = defineProps({
   muted: { type: Boolean, required: true },
@@ -31,15 +27,11 @@ const props = defineProps({
 
 const CyclePower = () => {
   const query: string = props.standby ? 'on' : 'off'
-  axios.get('/power/' + query).then(() => {
-    emit('update')
-  })
+  axios.get('/power/' + query)
 }
 
 const CycleMute = () => {
   const query: string = props.muted ? 'off' : 'on'
-  axios.get('/mute/' + query).then(() => {
-    emit('update')
-  })
+  axios.get('/mute/' + query)
 }
 </script>
