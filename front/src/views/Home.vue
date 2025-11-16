@@ -28,7 +28,7 @@
       ></LevelView>
     </v-window-item>
     <v-window-item key="input" value="#input">
-      <InputView :loading="loading" :current_input="status.data.current_input" @update="GetStatus"></InputView>
+      <InputView :loading="loading" :current_input="status.data.current_input"></InputView>
     </v-window-item>
     <v-window-item key="effect" value="#effect">
       <EffectView
@@ -41,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import MainView from '@/views/Main.vue'
@@ -49,11 +49,20 @@ import LevelView from '@/views/Level.vue'
 import InputView from '@/views/Input.vue'
 import EffectView from '@/views/Effect.vue'
 import Status, { Data } from '@/models/statusDTO'
+import { useSnackbarStore } from '@/stores/SnackbarStore'
 
 const status = ref<Status>(new Status())
 const loading = ref(true)
 const router = useRouter()
-const ws = new WebSocket('ws://'+import.meta.env.VITE_API_ENDPOINT+'/ws')
+const snackbar = useSnackbarStore()
+const endpoint = import.meta.env.VITE_API_ENDPOINT
+const wsendpoint = endpoint.includes("://") ? endpoint.split("://")[1] : endpoint;
+const ws = ref<WebSocket | null>(null)
+const isConnected = ref(false)
+let retryTimeout: number | undefined
+const baseDelay = 5000
+const maxDelay = 30000
+let currentDelay = baseDelay
 
 const currentTab = ref(router.currentRoute.value.hash)
 const tabs = [
@@ -63,12 +72,53 @@ const tabs = [
   { title: 'effect', icon: '$surround', value: '#effect' },
 ]
 
-ws.onmessage = (event) => {
-  try {
-    const incoming: Partial<Data> = JSON.parse(event.data)
-    Object.assign(status.value, incoming)
-  } catch (e) {
-    console.error('Invalid Message :', event.data)
+const Connect = () => {
+  snackbar.showSnackbar(`Attempting WebSocket connection...`, 'info')
+  ws.value = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + wsendpoint + "/ws")
+
+  ws.value.onopen = () => {
+    snackbar.showSnackbar(`Websocket Connected !`, 'success')
+    isConnected.value = true
+    currentDelay = baseDelay
+  }
+
+  ws.value.onclose = () => {
+    snackbar.showSnackbar(`Websocket Disconnected !`, 'warning')
+    isConnected.value = false
+    RetryConnect()
+  }
+
+  ws.value.onerror = (err) => {
+    snackbar.showSnackbar(`Websocket Error: ${err.type}`, 'error')
+    console.error("Websocket Error", err)
+    ws.value?.close()
+  }
+
+  ws.value.onmessage = (event) => {
+    try {
+      const incoming: Partial<Data> = JSON.parse(event.data)
+      Object.assign(status.value, incoming)
+    } catch (e) {
+      snackbar.showSnackbar(`Invalid Message : ${event.data}`, 'error')
+    }
+  }
+}
+
+const RetryConnect = () => {
+    if (retryTimeout) return
+    retryTimeout = window.setTimeout(() => {
+      retryTimeout = undefined
+      Connect()
+      currentDelay = Math.min(currentDelay * 2, maxDelay)
+      snackbar.showSnackbar(`Retrying WebSocket connection in ${currentDelay / 1000}s...`, 'info')
+    }, currentDelay)
+  }
+
+const close = () => {
+  ws.value?.close()
+  if (retryTimeout) {
+    clearTimeout(retryTimeout)
+    retryTimeout = undefined
   }
 }
 
@@ -80,6 +130,11 @@ const GetStatus = () => {
 }
 
 onMounted(() => {
+  Connect()
   GetStatus()
+})
+
+onUnmounted(() => {
+  close()
 })
 </script>

@@ -50,7 +50,7 @@ jobs:
       - name: Gzip
         if: github.ref == 'refs/heads/master'
         working-directory: ./back/data/assets
-        run: for f in ./*; do gzip -9 ${f}; rm ${f}; done;
+        run: for f in ./*; do gzip -9 ${f}; done;
 
       - name: Commit
         if: github.ref == 'refs/heads/master'

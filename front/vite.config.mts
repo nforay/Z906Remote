@@ -32,11 +32,16 @@ export default defineConfig({
     }),
   ],
   build: {
+    chunkSizeWarningLimit: 300,
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name].js`,
         chunkFileNames: `assets/[name].js`,
         assetFileNames: `assets/[name].[ext]`,
+        manualChunks(id) {
+          if (id.includes('vuetify')) return 'vuetify'
+          if (id.includes('node_modules')) return 'vendor'
+        }
       },
     },
   },
