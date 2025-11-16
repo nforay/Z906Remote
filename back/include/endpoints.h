@@ -11,7 +11,7 @@ struct Endpoint {
     const uint8_t      action;
 };
 
-const Endpoint endpoints[] = {
+constexpr Endpoint endpoints[] = {
 
     {"/volume/main/set", SetValue, MAIN_LEVEL}, // Set the Main Level to the parameter value
     {"/volume/main/up", RunCommand, LEVEL_MAIN_UP}, // Increase Main Level by one unit

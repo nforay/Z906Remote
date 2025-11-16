@@ -6,6 +6,7 @@
  */
 #include "endpoints.h"
 #include "environment.h"
+#include "version.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
@@ -19,23 +20,24 @@
 #include <WiFiUdp.h>
 #include <Z906.h>
 
+
 namespace z906remote {
 
-    void         init_wifi();
-    void         connect_to_wifi();
-    void         on_connected();
-    void         onWebSocketMessage(void *, uint8_t *, size_t);
-    void         broadcastMessage(const String &);
-    void         broadcastStatus();
-    void         updateClients();
-    void         init_web_server();
-    JsonDocument respond_to_request(const Endpoint &, const String &, int &);
-    void         handle_get_status(JsonDocument &);
-    void         handle_muted_state(JsonDocument &);
-    void         handle_get_temperature(JsonDocument &);
-    void         handle_decode_mode_state(JsonDocument &);
-    void         handle_current_effect(JsonDocument &);
-    bool         validate_input_value(const String &, uint8_t &);
+    void init_wifi();
+    void connect_to_wifi();
+    void on_connected();
+    void onWebSocketMessage(void *, uint8_t *, size_t);
+    void broadcastMessage(const String &);
+    void broadcastStatus();
+    void updateClients();
+    void init_web_server();
+    void respond_to_request(AsyncWebServerRequest *, AsyncResponseStream *, const Endpoint &);
+    void handle_get_status(JsonDocument &);
+    void handle_muted_state(JsonDocument &);
+    void handle_get_temperature(JsonDocument &);
+    void handle_decode_mode_state(JsonDocument &);
+    void handle_current_effect(JsonDocument &);
+    bool validate_input_value(long, uint8_t &);
 
     AsyncWebServer   SERVER(80);
     ESP8266WiFiMulti WIFIMULTI;
@@ -173,13 +175,7 @@ namespace z906remote {
             SERVER.on(e.path, HTTP_GET, [e](AsyncWebServerRequest *request) {
                 AsyncResponseStream *response =
                     request->beginResponseStream("application/json");
-                String       value = request->hasParam("value")
-                                         ? request->getParam("value")->value()
-                                         : "";
-                int          code  = 200;
-                JsonDocument doc   = respond_to_request(e, value, code);
-                serializeJson(doc, *response);
-                response->setCode(code);
+                respond_to_request(request, response, e);
                 request->send(response);
             });
         }
@@ -188,8 +184,10 @@ namespace z906remote {
                       AwsEventType type, void *arg, uint8_t *data, size_t len) {
             switch (type) {
             case WS_EVT_CONNECT:
-                break;
             case WS_EVT_DISCONNECT:
+            case WS_EVT_PING:
+            case WS_EVT_PONG:
+            case WS_EVT_ERROR:
                 break;
             case WS_EVT_DATA:
                 onWebSocketMessage(arg, data, len);
@@ -208,29 +206,29 @@ namespace z906remote {
     /**
      * Respond to a HTTP request for the given endpoint.
      */
-    JsonDocument respond_to_request(const Endpoint &endpoint,
-                                    const String &value, int &code) {
+    void respond_to_request(AsyncWebServerRequest *request,
+                            AsyncResponseStream *response, const Endpoint &endpoint) {
         JsonDocument doc;
         uint8_t      parsedValue = 0;
-        int          response;
-
+        int          cmdResponse;
+        int          code  = 200;
+        long         value = 0;
 
         if (LOGI.request(VERSION) == 0) {
-            doc["status"] = "disconnected";
-            return doc;
+            response->print("{\"status\":\"disconnected\"}");
+            response->setCode(code);
+            return;
         }
         doc["status"]  = "connected";
         doc["success"] = true;
-
-        JsonObject debug = doc["debug"].to<JsonObject>();
-        debug["path"]    = endpoint.path;
-        debug["type"]    = endpoint.type;
-        debug["action"]  = ([](int i) {
-            String s = String(i, HEX);
-            s.toUpperCase();
-            return s;
-        })(endpoint.action);
-        debug["value"]   = value;
+#ifdef DEBUG_BUILD
+        JsonObject debug  = doc["debug"].to<JsonObject>();
+        debug["version"]  = FIRMWARE_VERSION;
+        debug["freeheap"] = ESP.getFreeHeap();
+        debug["path"]     = endpoint.path;
+        debug["type"]     = endpoint.type;
+        debug["action"]   = endpoint.action;
+#endif
 
         switch (endpoint.type) {
         case EndpointType::SelectInput:
@@ -238,21 +236,25 @@ namespace z906remote {
             broadcastStatus();
             break;
         case EndpointType::RunCommand:
-            response = LOGI.cmd(endpoint.action);
+            cmdResponse = LOGI.cmd(endpoint.action);
             broadcastStatus();
-            if (response) {
-                doc["value"] = response;
+            if (cmdResponse) {
+                doc["value"] = cmdResponse;
             } else {
                 doc["success"] = false;
             }
             break;
         case EndpointType::SetValue:
+            value = request->getParam("value")->value().toInt();
+#ifdef DEBUG_BUILD
+            debug["value"]    = request->getParam("value")->value();
+            debug["valueInt"] = value;
+#endif
             if (validate_input_value(value, parsedValue)) {
                 LOGI.cmd(endpoint.action, parsedValue);
                 broadcastStatus();
             } else {
-                code = 400;
-
+                code           = 400;
                 doc["success"] = false;
                 doc["message"] =
                     "Invalid value. Value must be between 0 and 255.";
@@ -290,7 +292,8 @@ namespace z906remote {
                 "Your action was recognised, but it is not supported.";
             break;
         }
-        return doc;
+        serializeJson(doc, *response);
+        response->setCode(code);
     }
 
     inline void handle_get_status(JsonDocument &doc) {
@@ -352,22 +355,13 @@ namespace z906remote {
      * Returns true if the value is valid, false otherwise.
      * If valid, the parsed value is stored in the 'result' parameter.
      */
-    bool validate_input_value(const String &valueStr, uint8_t &result) {
-        const int32_t value = valueStr.toInt();
-
-        // Check if the conversion was successful
-        if (value != 0L || valueStr.equals("0")) {
-
-            if (value >= 0L && value <= 255L) {
-                // Valid value, store the result.
-                result = static_cast<uint8_t>(value);
-                return true; // Value is valid.
-            } else {
-                // Value is not in the valid range.
-                return false;
-            }
+    bool validate_input_value(const long value, uint8_t &result) {
+        if (value >= 0L && value <= 255L) {
+            // Valid value, store the result.
+            result = static_cast<uint8_t>(value);
+            return true; // Value is valid.
         } else {
-            // Invalid value format.
+            // Value is not in the valid range.
             return false;
         }
     }
