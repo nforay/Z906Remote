@@ -37,6 +37,7 @@ namespace z906remote {
     void handle_get_temperature(JsonDocument &);
     void handle_decode_mode_state(JsonDocument &);
     void handle_current_effect(JsonDocument &);
+    void handle_get_volume(JsonDocument &);
     bool validate_input_value(long, uint8_t &);
 
     AsyncWebServer   SERVER(80);
@@ -280,6 +281,9 @@ namespace z906remote {
             case FunctionAction::Decode:
                 handle_decode_mode_state(doc);
                 break;
+            case FunctionAction::Volume:
+                handle_get_volume(doc);
+                break;
             default: // do nothing
                 break;
             }
@@ -348,6 +352,13 @@ namespace z906remote {
      */
     inline void handle_decode_mode_state(JsonDocument &doc) {
         doc["value"] = LOGI.decode_mode();
+    }
+
+    /**
+     * Get the volume on the current input
+     */
+    inline void handle_get_volume(JsonDocument &doc) {
+        doc["value"] = LOGI.input_volume();
     }
 
     /**

@@ -377,3 +377,42 @@ uint8_t Z906::main_sensor() {
     // Return the temperature reading from the main sensor
     return temp[7];
 }
+
+/**
+ * Retrieve the current volume of the active input.
+ *
+ * This function sends a command to request the current volume of the active
+ * input, waits for the response and returns the volume value if the operation
+ * is successful.
+ *
+ * @return The volume reading of the current input, 0 if input is silent or if
+ * the operation times out or the response is invalid.
+ */
+uint32_t Z906::input_volume() {
+    // Send command to request current volume
+    write(GET_INPUT_GAIN);
+
+    // Record the current time for timeout monitoring
+    const uint32_t currentMillis = millis();
+
+    // Wait until the full volume response is available in the serial buffer
+    while (_dev_serial->available() < GAIN_TOTAL_LENGTH) {
+        // Check for timeout
+        if (millis() - currentMillis > SERIAL_TIME_OUT)
+            return 0;
+    }
+
+    // Read the volume response into a temporary buffer
+    uint8_t temp[GAIN_TOTAL_LENGTH];
+    for (auto &x : temp) {
+        x = _dev_serial->read();
+    }
+
+    // Validate the volume response
+    if (temp[2] != EXP_MODEL_GAIN)
+        return 0;
+
+    // Return the volume reading from the main sensor
+    return ((uint32_t)temp[4] << 16) | ((uint32_t)temp[5] << 8) | ((uint32_t)temp[6]);
+    ;
+}

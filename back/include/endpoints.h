@@ -3,7 +3,7 @@
 
 enum EndpointType { SelectInput, RunCommand, SetValue, GetValue, RunFunction };
 
-enum FunctionAction { Status, Mute, Effect, Temperature, Decode };
+enum FunctionAction { Status, Mute, Effect, Temperature, Decode, Volume };
 
 struct Endpoint {
     const char        *path;
@@ -44,6 +44,8 @@ constexpr Endpoint endpoints[] = {
 
     {"/input/enable", RunCommand, NO_BLOCK_INPUTS}, // Enable signal input
     {"/input/disable", RunCommand, BLOCK_INPUTS},   // Disable signal input
+
+    {"/input/volume", RunFunction, Volume}, // Get the current input volume
 
     {"/input/0", SelectInput, SELECT_INPUT_1}, // Swap to the TRS 5.1 input
     {"/input/1", SelectInput, SELECT_INPUT_2}, // Swap to the RCA 2.0 input

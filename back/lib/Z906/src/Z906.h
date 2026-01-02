@@ -11,6 +11,7 @@
 #define STATUS_BUFFER_SIZE 0x20
 #define ACK_TOTAL_LENGTH 0x05
 #define TEMP_TOTAL_LENGTH 0x0A
+#define GAIN_TOTAL_LENGTH 0x08
 
 // Single Commands
 #define SELECT_INPUT_1 0x02
@@ -114,7 +115,8 @@ public:
     int  request(const uint8_t);
     void print_status();
 
-    uint8_t main_sensor();
+    uint8_t  main_sensor();
+    uint32_t input_volume();
 
     void         on();
     void         off();
@@ -133,6 +135,7 @@ private:
     const uint8_t EXP_STX          = 0xAA;
     const uint8_t EXP_MODEL_STATUS = 0x0A;
     const uint8_t EXP_MODEL_TEMP   = 0x0C;
+    const uint8_t EXP_MODEL_GAIN   = 0x08;
 
     const uint8_t STATUS_STX           = 0x00;
     const uint8_t STATUS_MODEL         = 0x01;
