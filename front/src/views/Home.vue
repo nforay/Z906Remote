@@ -14,27 +14,27 @@
     <v-window-item key="main" value="#main">
       <MainView
         :loading="loading"
-        :muted="status.data.muted"
-        :main_level="status.data.main_level"
-        :standby="status.data.stby"
+        :muted="status.muted"
+        :main_level="status.main_level"
+        :standby="status.stby"
       ></MainView>
     </v-window-item>
     <v-window-item key="volume" value="#level">
       <LevelView
         :loading="loading"
-        :center_level="status.data.center_level"
-        :rear_level="status.data.rear_level"
-        :sub_level="status.data.sub_level"
+        :center_level="status.center_level"
+        :rear_level="status.rear_level"
+        :sub_level="status.sub_level"
       ></LevelView>
     </v-window-item>
     <v-window-item key="input" value="#input">
-      <InputView :loading="loading" :current_input="status.data.current_input"></InputView>
+      <InputView :loading="loading" :current_input="status.current_input"></InputView>
     </v-window-item>
     <v-window-item key="effect" value="#effect">
       <EffectView
         :loading="loading"
-        :current_fx="status.data.current_fx"
-        :decode_mode="status.data.decode_mode"
+        :current_fx="status.current_fx"
+        :decode_mode="status.decode_mode"
       ></EffectView>
     </v-window-item>
   </v-window>
@@ -48,10 +48,10 @@ import MainView from '@/views/Main.vue'
 import LevelView from '@/views/Level.vue'
 import InputView from '@/views/Input.vue'
 import EffectView from '@/views/Effect.vue'
-import Status, { Data } from '@/models/statusDTO'
+import Status, { StatusDTO, IStatus } from '@/models/statusDTO'
 import { useSnackbarStore } from '@/stores/SnackbarStore'
 
-const status = ref<Status>(new Status())
+const status = ref<Status>(new Status(new StatusDTO()))
 const loading = ref(true)
 const router = useRouter()
 const snackbar = useSnackbarStore()
@@ -96,9 +96,11 @@ const Connect = () => {
 
   ws.value.onmessage = (event) => {
     try {
-      const incoming: Partial<Data> = JSON.parse(event.data)
-      Object.assign(status.value, incoming)
-    } catch (e) {
+      const incoming = JSON.parse(event.data) as {
+        data: Partial<IStatus>
+      }
+      Object.assign(status.value, incoming.data)
+    } catch (err) {
       snackbar.showSnackbar(`Invalid Message : ${event.data}`, 'error')
     }
   }
@@ -122,11 +124,31 @@ const close = () => {
   }
 }
 
-const GetStatus = () => {
-  axios.get<Status>('/status').then((response) => {
-    status.value = response.data
-    loading.value = false
-  })
+interface IStatusApiResponse {
+  status: string
+  success: boolean
+  data: IStatus
+}
+
+const GetStatus = async () => {
+  try {
+    const response = await axios.get<IStatusApiResponse>('/status')
+    
+    if (response.data.success && response.data.data) {
+      status.value = new Status(response.data.data)
+    }
+  } catch (err) {
+    let message = 'Unknown error'
+
+    if (axios.isAxiosError(err)) {
+      message = err.response?.data?.message ?? err.response?.statusText ?? err.message
+    } else if (err instanceof Error) {
+      message = err.message
+    }
+    snackbar.showSnackbar(`Error fetching status : ${message}`, 'error')
+  } finally {
+    setTimeout(() => (loading.value = false), 500)
+  }
 }
 
 onMounted(() => {

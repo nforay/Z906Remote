@@ -176,6 +176,7 @@ namespace z906remote {
             SERVER.on(e.path, HTTP_GET, [e](AsyncWebServerRequest *request) {
                 AsyncResponseStream *response =
                     request->beginResponseStream("application/json");
+                response->addHeader("Access-Control-Allow-Origin", "*");
                 respond_to_request(request, response, e);
                 request->send(response);
             });
