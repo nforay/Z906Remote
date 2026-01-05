@@ -68,6 +68,8 @@ If you're using a **D1 Mini** or simiar with a CH340 USB to Serial Chip install 
 
 Plug the D1 Mini, set the COM Port and click the **Upload** button in the [PlatformIO Toolbar](https://docs.platformio.org/en/latest/integration/ide/vscode.html#platformio-toolbar).
 
+After the first flash you can uncomment the settings in `back/params.ini` to use OTA Updates.
+
 ## Wiring
 
 ### Pinout
@@ -139,6 +141,7 @@ When making a web request to any of these endpoints, the microcontroller will ru
 | /volume/rear/up        | -            | LEVEL_REAR_UP     | Increase Rear Level by one unit                |
 | /volume/rear/down      | -            | LEVEL_REAR_DOWN   | Decrease Rear Level by one unit                |
 |                        |
+| /input/volume          | -            | GET_INPUT_GAIN    | Get the current input volume                   |
 | /input/decode          | -            | -                 | Get the Decode Mode state                      |
 | /input/decode/on       | -            | SELECT_EFFECT_51  | Enable Decode Mode                             |
 | /input/decode/off      | -            | DISABLE_EFFECT_51 | Disable Decode Mode                            |
