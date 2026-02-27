@@ -26,8 +26,5 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-back/params.ini
-back/include/environment.h
-
 front/node_modules
 front/dist

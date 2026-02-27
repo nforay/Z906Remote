@@ -24,6 +24,8 @@ import {
   mdiVolumePlus,
   mdiRadioboxBlank,
   mdiRadioboxMarked,
+  mdiGithub,
+  mdiTag,
 } from '@mdi/js'
 
 // https://vuetifyjs.com/en/introduction/why-vuetify/#feature-guides
@@ -54,6 +56,8 @@ export default createVuetify({
       volPlus: mdiVolumePlus,
       radioFalse: mdiRadioboxBlank,
       radioTrue: mdiRadioboxMarked,
+      github: mdiGithub,
+      tag: mdiTag,
     },
     sets: {
       mdi,

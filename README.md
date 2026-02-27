@@ -48,13 +48,10 @@ cd Z906Remote
 Duplicate the template files
 
 ```shell
-cp back/include/environment.h.tpl back/include/environment.h
-cp back/params.ini.tpl back/params.ini
+cp .\.env .\.env.local
 ```
 
-Edit `back/include/environment.h` with your WiFi network credentials and set a password for future OTA Updates.
-
-Modify `back/params.ini` to set the OTA Update password.
+Edit `.env.local` with your WiFi network credentials and set a password for future OTA Updates. If you want to enable MQTT, set INCLUDE_MQTT=1 and fill in your server information.
 
 ### Build
 
@@ -66,9 +63,13 @@ The simplest method is utilizing [PlatformIO IDE for VSCode](https://docs.platfo
 
 If you're using a **D1 Mini** or simiar with a CH340 USB to Serial Chip install the [CH340 Driver](https://learn.sparkfun.com/tutorials/how-to-install-ch340-drivers/all#windows-710).
 
-Plug the D1 Mini, set the COM Port and click the **Upload** button in the [PlatformIO Toolbar](https://docs.platformio.org/en/latest/integration/ide/vscode.html#platformio-toolbar).
+Plug the D1 Mini, set the COM Port and click the **Upload** button in the [PlatformIO Toolbar](https://docs.platformio.org/en/latest/integration/ide/vscode.html#platformio-toolbar). Use the **Upload Filesystem Image** to upload the LittleFS filesystem, including the web pages.
 
-After the first flash you can uncomment the settings in `back/params.ini` to use OTA Updates.
+After the first flash you can edit `.env.local` and set `UPLOAD_OTA=1` to use OTA Updates.
+
+### Home Assistant Discovery
+
+If MQTT is enabled, the device will automatically publish discovery messages compatible with Home Assistant, so your entities appear automatically in the UI.
 
 ## Wiring
 
@@ -160,6 +161,7 @@ When making a web request to any of these endpoints, the microcontroller will ru
 | /status                | -            | -                 | Get system status from buffer                  |
 | /temperature           | -            | GET_TEMP          | Gets the system temperature                    |
 | /version               | -            | VERSION           | Gets the system firmware version               |
+| /idle                  | -            | GET_PWR_UP_TIME   | Get the idle time                              |
 | /power                 | -            | STATUS_STBY       | Get the current standby status                 |
 | /power/on              | -            | PWM_ON            | Turn the system on                             |
 | /power/off             | -            | PWM_OFF           | Turn the system off                            |
@@ -174,6 +176,5 @@ The API can be called through any browser. For example:
 ![HTTP Request](/../docs/images/request.png?raw=true "HTTP Request")
 
 ## TODO
-- Integrate MQTT functionality
 - Implement support for the original IR remote
 - Enable multi-language support

@@ -40,11 +40,8 @@ jobs:
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
 
-      - name: Rename header file
-        run: mv back/params.ini.tpl back/params.ini
-
-      - name: Rename config file
-        run: mv back/include/environment.h.tpl back/include/environment.h
+      - name: Edit .env
+        run: sed -i 's/INCLUDE_MQTT=0/INCLUDE_MQTT=1/g' .env
 
       - name: Build PlatformIO Project
         run: pio run

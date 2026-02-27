@@ -3,7 +3,16 @@
 
 enum EndpointType { SelectInput, RunCommand, SetValue, GetValue, RunFunction };
 
-enum FunctionAction { Status, Mute, Effect, Temperature, Decode, Volume };
+enum FunctionAction {
+    Status,
+    Mute,
+    Effect,
+    Temperature,
+    Decode,
+    Volume,
+    Idle,
+    Firmware
+};
 
 struct Endpoint {
     const char        *path;
@@ -11,7 +20,7 @@ struct Endpoint {
     const uint8_t      action;
 };
 
-constexpr Endpoint endpoints[] = {
+inline constexpr Endpoint endpoints[] = {
 
     {"/volume/main/set", SetValue, MAIN_LEVEL}, // Set the Main Level to the parameter value
     {"/volume/main/up", RunCommand, LEVEL_MAIN_UP}, // Increase Main Level by one unit
@@ -68,4 +77,6 @@ constexpr Endpoint endpoints[] = {
     {"/status", RunFunction, Status},   // Get system status from buffer
     {"/effect", RunFunction, Effect},   // Get the Effect on the current input
     {"/temperature", RunFunction, Temperature}, // Get the system temperature
+    {"/idle", RunFunction, Idle},               // Get the idle time
+    {"/firmware", RunFunction, Firmware},       // Get the firmware version
 };

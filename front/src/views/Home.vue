@@ -10,7 +10,7 @@
       :href="item.value"
     ></v-tab>
   </v-tabs>
-  <v-window v-model="currentTab" :touch="false">
+  <v-window v-model="currentTab">
     <v-window-item key="main" value="#main">
       <MainView
         :loading="loading"
@@ -41,28 +41,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import MainView from '@/views/Main.vue'
 import LevelView from '@/views/Level.vue'
 import InputView from '@/views/Input.vue'
 import EffectView from '@/views/Effect.vue'
-import Status, { StatusDTO, IStatus } from '@/models/statusDTO'
+import Status, { StatusDTO } from '@/models/statusDTO'
+import ToastNotification from '@/models/toastNotificationDTO'
+import LogMessage from '@/models/logMessageDTO'
 import { useSnackbarStore } from '@/stores/SnackbarStore'
+import { useVersionStore } from "@/stores/VersionStore"
 
 const status = ref<Status>(new Status(new StatusDTO()))
 const loading = ref(true)
 const router = useRouter()
 const snackbar = useSnackbarStore()
-const endpoint = import.meta.env.VITE_API_ENDPOINT
-const wsendpoint = endpoint.includes("://") ? endpoint.split("://")[1] : endpoint;
-const ws = ref<WebSocket | null>(null)
+const version = useVersionStore()
+const evtSource = ref<EventSource | null>(null)
 const isConnected = ref(false)
-let retryTimeout: number | undefined
-const baseDelay = 5000
-const maxDelay = 30000
-let currentDelay = baseDelay
 
 const currentTab = ref(router.currentRoute.value.hash)
 const tabs = [
@@ -72,91 +69,62 @@ const tabs = [
   { title: 'effect', icon: '$surround', value: '#effect' },
 ]
 
-const Connect = () => {
-  snackbar.showSnackbar(`Attempting WebSocket connection...`, 'info')
-  ws.value = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + wsendpoint + "/ws")
+const connect = () => {
+  snackbar.showSnackbar('connecting...', 'info')
 
-  ws.value.onopen = () => {
-    snackbar.showSnackbar(`Websocket Connected !`, 'success')
+  evtSource.value = new EventSource("/events")
+
+  evtSource.value.onopen = () => {
+    snackbar.showSnackbar('Connected !', 'success')
     isConnected.value = true
-    currentDelay = baseDelay
   }
 
-  ws.value.onclose = () => {
-    snackbar.showSnackbar(`Websocket Disconnected !`, 'warning')
-    isConnected.value = false
-    RetryConnect()
+  evtSource.value.onerror = (err) => {
+    if (isConnected.value) {
+      snackbar.showSnackbar('Disconnected ! Reconnecting...', 'warning')
+      isConnected.value = false
+    }
   }
 
-  ws.value.onerror = (err) => {
-    snackbar.showSnackbar(`Websocket Error: ${err.type}`, 'error')
-    console.error("Websocket Error", err)
-    ws.value?.close()
-  }
-
-  ws.value.onmessage = (event) => {
+  evtSource.value?.addEventListener("status", (event: MessageEvent) => {
     try {
-      const incoming = JSON.parse(event.data) as {
-        data: Partial<IStatus>
+      const data = JSON.parse(event.data)
+      const partialDto: Partial<StatusDTO> = data.status
+      Object.assign(status.value, partialDto)
+      if (loading.value) {
+        setTimeout(() => (loading.value = false), 500)
       }
-      Object.assign(status.value, incoming.data)
     } catch (err) {
-      snackbar.showSnackbar(`Invalid Message : ${event.data}`, 'error')
+      console.error(event.data)
     }
-  }
-}
+  });
 
-const RetryConnect = () => {
-    if (retryTimeout) return
-    retryTimeout = window.setTimeout(() => {
-      retryTimeout = undefined
-      Connect()
-      currentDelay = Math.min(currentDelay * 2, maxDelay)
-      snackbar.showSnackbar(`Retrying WebSocket connection in ${currentDelay / 1000}s...`, 'info')
-    }, currentDelay)
-  }
-
-const close = () => {
-  ws.value?.close()
-  if (retryTimeout) {
-    clearTimeout(retryTimeout)
-    retryTimeout = undefined
-  }
-}
-
-interface IStatusApiResponse {
-  status: string
-  success: boolean
-  data: IStatus
-}
-
-const GetStatus = async () => {
-  try {
-    const response = await axios.get<IStatusApiResponse>('/status')
-    
-    if (response.data.success && response.data.data) {
-      status.value = new Status(response.data.data)
+  evtSource.value?.addEventListener("log", (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data)
+      const logMsg = new LogMessage(data)
+      logMsg.logToConsole()
+    } catch (err) {
+      console.error(event.data)
     }
-  } catch (err) {
-    let message = 'Unknown error'
+  });
 
-    if (axios.isAxiosError(err)) {
-      message = err.response?.data?.message ?? err.response?.statusText ?? err.message
-    } else if (err instanceof Error) {
-      message = err.message
+  evtSource.value?.addEventListener("notification", (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data);
+      const notif = new ToastNotification(data)
+      snackbar.showSnackbar(notif.text, notif.type)
+    } catch (err) {
+      console.error(event.data)
     }
-    snackbar.showSnackbar(`Error fetching status : ${message}`, 'error')
-  } finally {
-    setTimeout(() => (loading.value = false), 500)
-  }
+  });
+
+  evtSource.value?.addEventListener("update", (event: MessageEvent) => {
+    version.checkVersion(true);
+  });
 }
 
 onMounted(() => {
-  Connect()
-  GetStatus()
-})
-
-onUnmounted(() => {
-  close()
+  connect()
 })
 </script>

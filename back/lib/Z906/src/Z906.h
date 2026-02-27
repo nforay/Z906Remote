@@ -12,6 +12,7 @@
 #define ACK_TOTAL_LENGTH 0x05
 #define TEMP_TOTAL_LENGTH 0x0A
 #define GAIN_TOTAL_LENGTH 0x08
+#define IDLE_TOTAL_LENGTH 0x08
 
 // Single Commands
 #define SELECT_INPUT_1 0x02
@@ -91,7 +92,7 @@ public:
         uint8_t center_level;
         uint8_t sub_level;
         uint8_t current_input;
-        uint8_t muted;
+        uint8_t unknown;
         uint8_t fx_input_4;
         uint8_t fx_input_5;
         uint8_t fx_input_2;
@@ -104,27 +105,33 @@ public:
         uint8_t ver_b;
         uint8_t ver_c;
         uint8_t stby;
+        uint8_t padding;
         uint8_t auto_stby;
-        uint8_t pad[10];
+        uint8_t checksum;
+        uint8_t muted;
+        uint8_t decode_mode;
+        uint8_t pad[6];
     } t_packetdata;
 
-    Z906(HardwareSerial &serial);
+    explicit Z906(HardwareSerial &serial);
 
     int  cmd(const uint8_t);
     void cmd(const uint8_t, uint8_t);
     int  request(const uint8_t);
     void print_status();
+    void print_status(Stream &);
 
     uint8_t  main_sensor();
     uint32_t input_volume();
+    uint32_t idle_time();
 
-    void         on();
-    void         off();
-    void         input(uint8_t, uint8_t = 0xFF);
-    bool         muted_state() const;
-    bool         decode_mode() const;
-    int          current_effect() const;
-    t_packetdata get_data() const;
+    void                on();
+    void                off();
+    void                input(uint8_t, uint8_t = 0xFF);
+    bool                muted_state() const;
+    bool                decode_mode() const;
+    int                 current_effect() const;
+    const t_packetdata &get_data() const;
 
 private:
     typedef union u_packet {
@@ -136,6 +143,7 @@ private:
     const uint8_t EXP_MODEL_STATUS = 0x0A;
     const uint8_t EXP_MODEL_TEMP   = 0x0C;
     const uint8_t EXP_MODEL_GAIN   = 0x08;
+    const uint8_t EXP_IDLE_TIME    = 0x0F;
 
     const uint8_t STATUS_STX           = 0x00;
     const uint8_t STATUS_MODEL         = 0x01;
@@ -145,7 +153,7 @@ private:
     const uint8_t STATUS_CENTER_LEVEL  = 0x05;
     const uint8_t STATUS_SUB_LEVEL     = 0x06;
     const uint8_t STATUS_CURRENT_INPUT = 0x07;
-    const uint8_t STATUS_MUTED         = 0x08;
+    const uint8_t STATUS_UNKNOWN       = 0x08;
     const uint8_t STATUS_FX_INPUT_4    = 0x09;
     const uint8_t STATUS_FX_INPUT_5    = 0x0A;
     const uint8_t STATUS_FX_INPUT_2    = 0x0B;
@@ -158,7 +166,10 @@ private:
     const uint8_t STATUS_VER_B         = 0x12;
     const uint8_t STATUS_VER_C         = 0x13;
     const uint8_t STATUS_STBY          = 0x14;
-    const uint8_t STATUS_AUTO_STBY     = 0x15;
+    const uint8_t STATUS_AUTO_STBY     = 0x16;
+    const uint8_t STATUS_MUTED         = 0x18;
+    const uint8_t STATUS_DECODE_MODE   = 0x19;
+
     uint8_t STATUS_CHECKSUM = 0; // Will be dynamically derived in update()
 
     const uint8_t MAX_VOL = 43; // Maximum volume can only be 43
@@ -167,6 +178,9 @@ private:
                                  STATUS_FX_INPUT_3, STATUS_FX_INPUT_4,
                                  STATUS_FX_INPUT_5, STATUS_FX_INPUT_AUX};
 
+    const uint8_t VOL_OFFSET[4] = {STATUS_MAIN_LEVEL, STATUS_SUB_LEVEL,
+                                   STATUS_CENTER_LEVEL, STATUS_REAR_LEVEL};
+
     void    write(uint8_t);
     void    write(uint8_t *, size_t);
     void    flush();
@@ -174,8 +188,6 @@ private:
     uint8_t LRC(const uint8_t *, size_t);
 
     HardwareSerial *_dev_serial;
-    bool            _muted_state = false;
-    bool            _decode_mode = true;
     t_packet        _status;
     size_t _status_len = 0; // Size of the full message in the status buffer
                             // (incl. control words and checksum)

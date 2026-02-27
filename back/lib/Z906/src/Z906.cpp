@@ -5,6 +5,7 @@
 Z906::Z906(HardwareSerial &serial) {
     _dev_serial = &serial;
     _dev_serial->begin(BAUD_RATE, SERIAL_CONFIG);
+    update();
 }
 
 /**
@@ -49,12 +50,14 @@ void Z906::off() {
 /**
  * Get the muted state
  */
-bool Z906::muted_state() const { return _muted_state; }
+bool Z906::muted_state() const { return static_cast<bool>(_status.data.muted); }
 
 /**
  * Get the Decode Mode state
  */
-bool Z906::decode_mode() const { return _decode_mode; }
+bool Z906::decode_mode() const {
+    return static_cast<bool>(_status.data.decode_mode);
+}
 
 /**
  * Get the Effect on the current input
@@ -63,8 +66,7 @@ int Z906::current_effect() const {
     return _status.buffer[INPUT_FX[_status.buffer[STATUS_CURRENT_INPUT]]];
 }
 
-
-Z906::t_packetdata Z906::get_data() const { return _status.data; }
+const Z906::t_packetdata &Z906::get_data() const { return _status.data; }
 
 /**
  * Change the input on the Z906 unit specifying an effect.
@@ -237,7 +239,7 @@ int Z906::request(const uint8_t cmd) {
         case SUB_LEVEL:
             // Normalize volume data to the range 0...255
             return static_cast<uint8_t>(
-                (static_cast<uint16_t>(_status.buffer[cmd]) * 255) / MAX_VOL);
+                (static_cast<uint16_t>(_status.buffer[cmd]) * 255 + 21) / MAX_VOL);
         default:
             // Return the requested data based on the command
             return _status.buffer[cmd];
@@ -259,16 +261,27 @@ int Z906::request(const uint8_t cmd) {
  * times out.
  */
 int Z906::cmd(const uint8_t cmd) {
+    uint8_t vol;
+    uint8_t dir;
+
+    if (cmd > SELECT_INPUT_AUX && cmd < PWM_OFF) {
+        vol = _status.buffer[VOL_OFFSET[(cmd - LEVEL_MAIN_UP) >> 1]];
+        dir = cmd & 1;
+        if ((dir & (vol == 0)) | ((dir ^ 1) & (vol >= MAX_VOL))) {
+            return 0;
+        }
+    }
+
     // Send the specified command to the device
     write(cmd);
 
     // Update muted state
-    if (cmd == MUTE_ON || MUTE_OFF) {
-        _muted_state = (cmd - MUTE_ON) == 0;
+    if (cmd == MUTE_ON || cmd == MUTE_OFF) {
+        _status.buffer[STATUS_MUTED] = (cmd - MUTE_ON) == 0;
     }
 
-    if (cmd == SELECT_EFFECT_51 || DISABLE_EFFECT_51) {
-        _decode_mode = (cmd - SELECT_EFFECT_51) == 0;
+    if (cmd == SELECT_EFFECT_51 || cmd == DISABLE_EFFECT_51) {
+        _status.buffer[STATUS_DECODE_MODE] = (cmd - SELECT_EFFECT_51) == 0;
     }
 
     // Record the current time for timeout monitoring
@@ -302,9 +315,9 @@ void Z906::cmd(const uint8_t cmdA, uint8_t cmdB) {
     // Update the internal status buffer with the current device status
     update();
 
-    // Normalize volume to the range 0...255 if applicable
+    // Normalize volume to the range 0...43 if applicable
     if (cmdA == MAIN_LEVEL || cmdA == REAR_LEVEL || cmdA == CENTER_LEVEL || cmdA == SUB_LEVEL) {
-        cmdB = static_cast<uint8_t>((static_cast<uint16_t>(cmdB) * MAX_VOL) / 255);
+        cmdB = static_cast<uint8_t>((static_cast<uint16_t>(cmdB) * MAX_VOL + 127) / 255);
     }
 
     // Update the specified parameter in the internal status buffer
@@ -338,6 +351,26 @@ void Z906::print_status() {
     }
 
     Serial.print("\n");
+}
+
+/**
+ * Print the current status of the Z906 device to the stream.
+ *
+ * This function updates the internal status buffer by querying the device,
+ * and then prints each byte of the status buffer in hexadecimal format to the
+ * stream.
+ */
+void Z906::print_status(Stream &stream) {
+    // Update the internal status buffer with the current device status
+    update();
+
+    // Print each byte of the status buffer in hexadecimal format
+    for (size_t i = 0; i < _status_len; i++) {
+        stream.print(_status.buffer[i], HEX);
+        stream.print(" ");
+    }
+
+    stream.print("\n");
 }
 
 /**
@@ -412,7 +445,43 @@ uint32_t Z906::input_volume() {
     if (temp[2] != EXP_MODEL_GAIN)
         return 0;
 
-    // Return the volume reading from the main sensor
+    // Return the volume reading
     return ((uint32_t)temp[4] << 16) | ((uint32_t)temp[5] << 8) | ((uint32_t)temp[6]);
-    ;
+}
+
+/**
+ * Retrieve the amplifier idle time.
+ *
+ * This function sends a command to request the idle time, waits for the
+ * response and returns the value if the operation is successful.
+ *
+ * @return The volume reading of the current input, 0 if input is silent or if
+ * the operation times out or the response is invalid.
+ */
+uint32_t Z906::idle_time() {
+    // Send command to request idle time
+    write(GET_PWR_UP_TIME);
+
+    // Record the current time for timeout monitoring
+    const uint32_t currentMillis = millis();
+
+    // Wait until the full time response is available in the serial buffer
+    while (_dev_serial->available() < IDLE_TOTAL_LENGTH) {
+        // Check for timeout
+        if (millis() - currentMillis > SERIAL_TIME_OUT)
+            return 0;
+    }
+
+    // Read the time response into a temporary buffer
+    uint8_t time[IDLE_TOTAL_LENGTH];
+    for (auto &x : time) {
+        x = _dev_serial->read();
+    }
+
+    // Validate the idle time response
+    if (time[2] != EXP_IDLE_TIME)
+        return 0;
+
+    // Return the idle time
+    return ((uint32_t)time[4] << 16) | ((uint32_t)time[5] << 8) | ((uint32_t)time[6]);
 }
