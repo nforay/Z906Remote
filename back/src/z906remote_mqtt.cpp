@@ -276,7 +276,7 @@ namespace z906remote::mqtt {
             switch (e.type) {
             case EntityType::Switch:
                 jw.lit(",\"cmd_t\":\"~/set\",\"stat_t\":\"~/"
-                       "state\",\"pl_on\":\"1\",\"pl_off\":\"0\"\"stat_on\":"
+                       "state\",\"pl_on\":\"1\",\"pl_off\":\"0\",\"stat_on\":"
                        "\"1\",\"stat_off\":\"0\"");
                 break;
             case EntityType::Number:
