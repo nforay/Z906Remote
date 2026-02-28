@@ -364,7 +364,7 @@ namespace z906remote {
 
         switch (endpoint.type) {
         case EndpointType::SelectInput:
-            LOGI.input(endpoint.action);
+            LOGI.input(endpoint.action, LOGI.input_effect(endpoint.action));
             queueBroadcastStatus = true;
             break;
         case EndpointType::RunCommand:

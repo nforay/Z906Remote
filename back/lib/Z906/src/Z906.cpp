@@ -62,8 +62,21 @@ bool Z906::decode_mode() const {
 /**
  * Get the Effect on the current input
  */
-int Z906::current_effect() const {
-    return _status.buffer[INPUT_FX[_status.buffer[STATUS_CURRENT_INPUT]]];
+uint8_t Z906::current_effect() const {
+    return _status.buffer[INPUT_FX[_status.data.current_input]];
+}
+
+/**
+ * Get the Command for the Effect currently selected on the input associated
+ * with the given input select command
+ * @param input The input to be set on the Z906 unit.
+ * @return The command used to set the effect on the given input.
+ */
+uint8_t Z906::input_effect(uint8_t cmd) const {
+    if (cmd < 2 || cmd > 7)
+        return 0xFF;
+    const uint8_t offset = INPUT_FX[INPUT_CMD_INDEX[cmd - 0x02]];
+    return EFFECT_ACTIONS[_status.buffer[offset]];
 }
 
 const Z906::t_packetdata &Z906::get_data() const { return _status.data; }
@@ -204,6 +217,8 @@ int Z906::update() {
         _status.buffer[STATUS_CHECKSUM] != LRC(_status.buffer, _status_len)) {
         return 0;
     }
+
+    _status.data.current_fx = current_effect();
 
     // Update successful
     return 1;

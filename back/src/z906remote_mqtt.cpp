@@ -39,19 +39,17 @@ namespace z906remote::mqtt {
         return static_cast<uint8_t>((packed >> (index * bits)) & mask);
     }
 
-    constexpr uint8_t POWER_ACTIONS[2]  = {PWM_OFF, PWM_ON};
-    constexpr uint8_t MUTE_ACTIONS[2]   = {MUTE_OFF, MUTE_ON};
-    constexpr uint8_t DOLBY_ACTIONS[2]  = {DISABLE_EFFECT_51, SELECT_EFFECT_51};
-    constexpr uint8_t INPUT_ACTIONS[6]  = {SELECT_INPUT_1, SELECT_INPUT_2,
-                                           SELECT_INPUT_3, SELECT_INPUT_4,
-                                           SELECT_INPUT_5, SELECT_INPUT_AUX};
-    constexpr uint8_t EFFECT_ACTIONS[4] = {SELECT_EFFECT_3D, SELECT_EFFECT_41,
-                                           SELECT_EFFECT_21, SELECT_EFFECT_NO};
+    constexpr uint8_t POWER_ACTIONS[2] = {PWM_OFF, PWM_ON};
+    constexpr uint8_t MUTE_ACTIONS[2]  = {MUTE_OFF, MUTE_ON};
+    constexpr uint8_t DOLBY_ACTIONS[2] = {DISABLE_EFFECT_51, SELECT_EFFECT_51};
+    constexpr uint8_t INPUT_ACTIONS[6] = {SELECT_INPUT_1, SELECT_INPUT_2,
+                                          SELECT_INPUT_3, SELECT_INPUT_4,
+                                          SELECT_INPUT_5, SELECT_INPUT_AUX};
 
     constexpr const char *INPUT_OPTIONS[] = {"Input 1", "Input 2", "Input 3",
                                              "Input 4", "Input 5", "Input AUX"};
 
-    constexpr const char *EFFECT_OPTIONS[] = {"3D", "4.1", "2.1", "Off"};
+    constexpr const char *EFFECT_OPTIONS[] = {"3D", "2.1", "4.1", "Off"};
 
     constexpr char   HA_DISCOVERY[] = "homeassistant/%s/%s_%s/config";
     constexpr char   HA_DEVICE[]    = ENV_MQTT_UID "/%s";
@@ -79,7 +77,8 @@ namespace z906remote::mqtt {
         {EntityType::Select, "input", "Input Source", "mdi:audio-input-rca", SelectInput,
          packActions(INPUT_ACTIONS, 6), 6, INPUT_OPTIONS, &Z906::t_packetdata::current_input},
         {EntityType::Select, "effect", "Effect Mode", "mdi:surround-sound",
-         RunCommand, packActions(EFFECT_ACTIONS, 4), 4, EFFECT_OPTIONS},
+         RunCommand, packActions(LOGI.EFFECT_ACTIONS, 4), 4, EFFECT_OPTIONS,
+         &Z906::t_packetdata::current_fx},
         {EntityType::Sensor, "temperature", "Temperature", "mdi:thermometer",
          RunFunction, Temperature, 1},
         {EntityType::Button, "main/up", "Main +", "mdi:volume-plus", RunCommand,
@@ -146,10 +145,10 @@ namespace z906remote::mqtt {
 
     void publishState(const EntityConfig &e) {
         if (e.type == EntityType::Select) {
-            if (e.dataMember) {
+            if (e.count == 6) {
                 publishState(e, INPUT_OPTIONS[LOGI.get_data().*(e.dataMember)]);
             } else {
-                publishState(e, EFFECT_OPTIONS[LOGI.current_effect()]);
+                publishState(e, EFFECT_OPTIONS[LOGI.get_data().*(e.dataMember)]);
             }
         } else if (e.dataMember) {
             publishState(e, LOGI.get_data().*(e.dataMember));
@@ -176,10 +175,12 @@ namespace z906remote::mqtt {
             index = findOptionIndex(e, payload);
             if (index < e.count) {
                 switch (e.endpointType) {
-                case EndpointType::SelectInput:
-                    LOGI.input(unpackAction(e.packedActions, index, e.count));
+                case EndpointType::SelectInput: {
+                    uint8_t cmd = unpackAction(e.packedActions, index, e.count);
+                    LOGI.input(cmd, LOGI.input_effect(cmd));
                     broadcastStatus();
                     break;
+                }
                 case EndpointType::RunCommand:
                     LOGI.cmd(unpackAction(e.packedActions, index, e.count));
                     break;
@@ -220,6 +221,9 @@ namespace z906remote::mqtt {
                 handleEntityCommand(e, buffer);
                 LOGI.request(VERSION);
                 publishState(e);
+                // publish current fx when input is changed
+                if (e.object_id == ENTITIES[7].object_id)
+                    publishState(ENTITIES[8]);
             }
         }
     }

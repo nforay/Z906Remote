@@ -110,7 +110,8 @@ public:
         uint8_t checksum;
         uint8_t muted;
         uint8_t decode_mode;
-        uint8_t pad[6];
+        uint8_t current_fx;
+        uint8_t pad[5];
     } t_packetdata;
 
     explicit Z906(HardwareSerial &serial);
@@ -130,8 +131,11 @@ public:
     void                input(uint8_t, uint8_t = 0xFF);
     bool                muted_state() const;
     bool                decode_mode() const;
-    int                 current_effect() const;
+    uint8_t             current_effect() const;
+    uint8_t             input_effect(uint8_t) const;
     const t_packetdata &get_data() const;
+    static constexpr uint8_t EFFECT_ACTIONS[4] = {SELECT_EFFECT_3D, SELECT_EFFECT_21,
+                                                  SELECT_EFFECT_41, SELECT_EFFECT_NO};
 
 private:
     typedef union u_packet {
@@ -139,47 +143,50 @@ private:
         uint8_t      buffer[STATUS_BUFFER_SIZE];
     } t_packet;
 
-    const uint8_t EXP_STX          = 0xAA;
-    const uint8_t EXP_MODEL_STATUS = 0x0A;
-    const uint8_t EXP_MODEL_TEMP   = 0x0C;
-    const uint8_t EXP_MODEL_GAIN   = 0x08;
-    const uint8_t EXP_IDLE_TIME    = 0x0F;
+    static constexpr uint8_t EXP_STX          = 0xAA;
+    static constexpr uint8_t EXP_MODEL_STATUS = 0x0A;
+    static constexpr uint8_t EXP_MODEL_TEMP   = 0x0C;
+    static constexpr uint8_t EXP_MODEL_GAIN   = 0x08;
+    static constexpr uint8_t EXP_IDLE_TIME    = 0x0F;
 
-    const uint8_t STATUS_STX           = 0x00;
-    const uint8_t STATUS_MODEL         = 0x01;
-    const uint8_t STATUS_LENGTH        = 0x02;
-    const uint8_t STATUS_MAIN_LEVEL    = 0x03;
-    const uint8_t STATUS_REAR_LEVEL    = 0x04;
-    const uint8_t STATUS_CENTER_LEVEL  = 0x05;
-    const uint8_t STATUS_SUB_LEVEL     = 0x06;
-    const uint8_t STATUS_CURRENT_INPUT = 0x07;
-    const uint8_t STATUS_UNKNOWN       = 0x08;
-    const uint8_t STATUS_FX_INPUT_4    = 0x09;
-    const uint8_t STATUS_FX_INPUT_5    = 0x0A;
-    const uint8_t STATUS_FX_INPUT_2    = 0x0B;
-    const uint8_t STATUS_FX_INPUT_AUX  = 0x0C;
-    const uint8_t STATUS_FX_INPUT_1    = 0x0D;
-    const uint8_t STATUS_FX_INPUT_3    = 0x0E;
-    const uint8_t STATUS_SPDIF_STATUS  = 0x0F;
-    const uint8_t STATUS_SIGNAL_STATUS = 0x10;
-    const uint8_t STATUS_VER_A         = 0x11;
-    const uint8_t STATUS_VER_B         = 0x12;
-    const uint8_t STATUS_VER_C         = 0x13;
-    const uint8_t STATUS_STBY          = 0x14;
-    const uint8_t STATUS_AUTO_STBY     = 0x16;
-    const uint8_t STATUS_MUTED         = 0x18;
-    const uint8_t STATUS_DECODE_MODE   = 0x19;
+    static constexpr uint8_t STATUS_STX           = 0x00;
+    static constexpr uint8_t STATUS_MODEL         = 0x01;
+    static constexpr uint8_t STATUS_LENGTH        = 0x02;
+    static constexpr uint8_t STATUS_MAIN_LEVEL    = 0x03;
+    static constexpr uint8_t STATUS_REAR_LEVEL    = 0x04;
+    static constexpr uint8_t STATUS_CENTER_LEVEL  = 0x05;
+    static constexpr uint8_t STATUS_SUB_LEVEL     = 0x06;
+    static constexpr uint8_t STATUS_CURRENT_INPUT = 0x07;
+    static constexpr uint8_t STATUS_UNKNOWN       = 0x08;
+    static constexpr uint8_t STATUS_FX_INPUT_4    = 0x09;
+    static constexpr uint8_t STATUS_FX_INPUT_5    = 0x0A;
+    static constexpr uint8_t STATUS_FX_INPUT_2    = 0x0B;
+    static constexpr uint8_t STATUS_FX_INPUT_AUX  = 0x0C;
+    static constexpr uint8_t STATUS_FX_INPUT_1    = 0x0D;
+    static constexpr uint8_t STATUS_FX_INPUT_3    = 0x0E;
+    static constexpr uint8_t STATUS_SPDIF_STATUS  = 0x0F;
+    static constexpr uint8_t STATUS_SIGNAL_STATUS = 0x10;
+    static constexpr uint8_t STATUS_VER_A         = 0x11;
+    static constexpr uint8_t STATUS_VER_B         = 0x12;
+    static constexpr uint8_t STATUS_VER_C         = 0x13;
+    static constexpr uint8_t STATUS_STBY          = 0x14;
+    static constexpr uint8_t STATUS_AUTO_STBY     = 0x16;
+    static constexpr uint8_t STATUS_MUTED         = 0x18;
+    static constexpr uint8_t STATUS_DECODE_MODE   = 0x19;
+    static constexpr uint8_t STATUS_CURRENT_FX    = 0x1A;
 
     uint8_t STATUS_CHECKSUM = 0; // Will be dynamically derived in update()
 
-    const uint8_t MAX_VOL = 43; // Maximum volume can only be 43
+    static constexpr uint8_t MAX_VOL = 43; // Maximum volume can only be 43
 
-    const uint8_t INPUT_FX[6] = {STATUS_FX_INPUT_1, STATUS_FX_INPUT_2,
-                                 STATUS_FX_INPUT_3, STATUS_FX_INPUT_4,
-                                 STATUS_FX_INPUT_5, STATUS_FX_INPUT_AUX};
+    static constexpr uint8_t INPUT_FX[6] = {
+        STATUS_FX_INPUT_1, STATUS_FX_INPUT_2, STATUS_FX_INPUT_3,
+        STATUS_FX_INPUT_4, STATUS_FX_INPUT_5, STATUS_FX_INPUT_AUX};
 
-    const uint8_t VOL_OFFSET[4] = {STATUS_MAIN_LEVEL, STATUS_SUB_LEVEL,
-                                   STATUS_CENTER_LEVEL, STATUS_REAR_LEVEL};
+    static constexpr uint8_t INPUT_CMD_INDEX[6] = {0, 2, 3, 1, 4, 5};
+
+    static constexpr uint8_t VOL_OFFSET[4] = {STATUS_MAIN_LEVEL, STATUS_SUB_LEVEL,
+                                              STATUS_CENTER_LEVEL, STATUS_REAR_LEVEL};
 
     void    write(uint8_t);
     void    write(uint8_t *, size_t);
