@@ -20,17 +20,18 @@ namespace z906remote {
     void handle_muted_state(JsonWriter &);
     void on_connected(const WiFiEventStationModeConnected &);
     void onWebSocketMessage(void *, uint8_t *, size_t);
-    void respond_to_request(AsyncWebServerRequest *, AsyncResponseStream *, const Endpoint &);
+    int  respond_to_request(AsyncWebServerRequest *, const Endpoint &);
 
-    static AsyncWebServer   SERVER(80);
-    static AsyncEventSource EVENTS("/events");
-    const uint32_t          timerDelay = 60000;
-    time_t                  currentTime;
-    int8_t                  lastExecutedDay = -1;
-    char                    JSON_BUFFER[512];
-    char                    FIRMWARE_LATEST[16]  = FIRMWARE_VERSION;
-    constexpr char          GITHUB_API[]         = "api.github.com";
-    bool                    queueBroadcastStatus = false;
+    static AsyncWebServer      SERVER(80);
+    static AsyncEventSource    EVENTS("/events");
+    static AsyncCorsMiddleware CORS;
+    const uint32_t             timerDelay = 60000;
+    time_t                     currentTime;
+    int8_t                     lastExecutedDay = -1;
+    char                       JSON_BUFFER[512];
+    char                       FIRMWARE_LATEST[16]  = FIRMWARE_VERSION;
+    constexpr char             GITHUB_API[]         = "api.github.com";
+    bool                       queueBroadcastStatus = false;
 #ifndef COMPILE_UNIX_TIME
 #    define COMPILE_UNIX_TIME 1767268800
 #endif
@@ -258,6 +259,11 @@ namespace z906remote {
      * Setup the web server.
      */
     void init_web_server() {
+        CORS.setOrigin("*");
+        CORS.setMethods("GET, OPTIONS");
+
+        SERVER.addMiddleware(&CORS);
+
         SERVER.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
             AsyncWebServerResponse *response =
                 request->beginResponse(LittleFS, "/index.html", "text/html");
@@ -283,27 +289,12 @@ namespace z906remote {
 
         EVENTS.onConnect([](AsyncEventSourceClient *) { broadcastStatus(); });
 
-        SERVER.onNotFound([](AsyncWebServerRequest *request) {
-            if (request->method() == HTTP_OPTIONS) {
-                AsyncWebServerResponse *response = request->beginResponse(200);
-                response->addHeader("Access-Control-Allow-Origin", "*");
-                response->addHeader("Access-Control-Allow-Methods",
-                                    "GET, OPTIONS");
-                response->addHeader("Access-Control-Allow-Headers",
-                                    "access-control-allow-origin");
-                request->send(response);
-                return;
-            } /*  else {
-                 request->send(404, "text/plain", "Not found");
-             } */
-        });
-
         for (const Endpoint &e : endpoints) {
             SERVER.on(e.path, HTTP_GET, [e](AsyncWebServerRequest *request) {
-                AsyncResponseStream *response =
-                    request->beginResponseStream("application/json");
+                AsyncWebServerResponse *response =
+                    request->beginResponse(respond_to_request(request, e),
+                                           "application/json", JSON_BUFFER);
                 response->addHeader("Access-Control-Allow-Origin", "*");
-                respond_to_request(request, response, e);
                 request->send(response);
             });
         }
@@ -314,20 +305,19 @@ namespace z906remote {
     /**
      * Respond to a HTTP request for the given endpoint.
      */
-    void respond_to_request(AsyncWebServerRequest *request,
-                            AsyncResponseStream *response, const Endpoint &endpoint) {
+    int respond_to_request(AsyncWebServerRequest *request, const Endpoint &endpoint) {
         JsonWriter jw;
         uint8_t    parsedValue = 0;
         int        cmdResponse;
         int        code  = 200;
         long       value = 0;
 
-        if (LOGI.request(VERSION) == 0) {
-            response->print("{\"status\":\"disconnected\"}");
-            response->setCode(code);
-            return;
-        }
         jw.init(JSON_BUFFER, sizeof(JSON_BUFFER));
+        if (LOGI.request(VERSION) == 0) {
+            jw.lit("{\"status\":\"disconnected\"}");
+            jw.buf[jw.len] = 0;
+            return code;
+        }
         jw.lit("{\"status\":\"connected\"");
 #ifdef DEBUG_BUILD
         jw.lit(",\"debug\":{");
@@ -371,14 +361,10 @@ namespace z906remote {
             cmdResponse = LOGI.cmd(endpoint.action);
             if (cmdResponse) {
                 queueBroadcastStatus = true;
-                jw.comma();
-                jw.lit("\"success\":true");
-                jw.comma();
-                jw.lit("\"value\":");
+                jw.lit(",\"success\":true,\"value\":");
                 jw.writeNumber(cmdResponse);
             } else {
-                jw.comma();
-                jw.lit("\"success\":false");
+                jw.lit(",\"success\":false");
             }
             break;
         case EndpointType::SetValue:
@@ -386,29 +372,21 @@ namespace z906remote {
             if (validate_input_value(value, parsedValue)) {
                 LOGI.cmd(endpoint.action, parsedValue);
                 queueBroadcastStatus = true;
-                jw.comma();
-                jw.lit("\"success\":true");
+                jw.lit(",\"success\":true");
             } else {
                 code = 400;
-                jw.comma();
-                jw.lit("\"success\":false");
-                jw.comma();
-                jw.lit("\"message\":\"Invalid value. Value must be between 0 "
-                       "and 255.\"");
+                jw.lit(",\"success\":false,\"message\":\"Invalid value. Value "
+                       "must be between 0 and 255.\"");
             }
             break;
         case EndpointType::GetValue:
-            jw.comma();
-            jw.lit("\"success\":true");
-            jw.comma();
-            jw.lit("\"value\":");
+            jw.lit(",\"success\":true,\"value\":");
             jw.writeNumber(LOGI.request(endpoint.action));
             break;
         case EndpointType::RunFunction:
             switch (endpoint.action) {
             case FunctionAction::Status: {
-                jw.comma();
-                jw.lit("\"data\":{");
+                jw.lit(",\"data\":{");
                 handle_get_status(jw);
                 jw.lit("}");
                 break;
@@ -440,18 +418,14 @@ namespace z906remote {
             // fall through
         default:
             code = 405;
-            jw.comma();
-            jw.lit("\"success\":false");
-            jw.comma();
-            jw.lit("\"message\":\"Your action was recognised, but it is not "
-                   "supported.\"");
+            jw.lit(",\"success\":false,\"message\":\"Your action was "
+                   "recognised, but it is not supported.\"");
             break;
         }
         jw.lit("}");
         jw.buf[jw.len] = 0;
 
-        response->setCode(code);
-        response->print(JSON_BUFFER);
+        return code;
     }
 
     inline void handle_get_status(JsonWriter &jw) {
