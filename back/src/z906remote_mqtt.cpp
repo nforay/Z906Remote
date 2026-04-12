@@ -301,7 +301,7 @@ namespace z906remote::mqtt {
             case EntityType::Sensor:
                 jw.lit(",\"stat_t\":\"~/"
                        "state\",\"dev_cla\":\"temperature\",\"stat_cla\":"
-                       "\"measurement\"");
+                       "\"measurement\",\"unit_of_meas\":\"°C\"");
                 break;
             case EntityType::Button:
                 jw.lit(",\"cmd_t\":\"~/set\",\"pl_prs\":\"1\"");
