@@ -6,6 +6,7 @@
  */
 #include "environment.h"
 #include "z906remote.h"
+#include "z906remote_ir.h"
 #include "z906remote_mqtt.h"
 
 #ifdef INCLUDE_OTA
@@ -18,6 +19,7 @@
  */
 void setup() {
     LittleFS.begin();
+    z906remote::infrared::enableIR();
     z906remote::init_wifi();
     z906remote::start_NTP();
     z906remote::init_web_server();
@@ -42,6 +44,7 @@ void loop() {
             z906remote::mqtt::connect();
         }
         z906remote::mqtt::loop();
+        z906remote::infrared::processIR();
         z906remote::mqtt::updateStates();
         z906remote::update_NTP();
         z906remote::updateClients();
